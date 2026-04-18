@@ -64,7 +64,7 @@ sources:
   obsidian-skills:
     whitelist: []          # 为空或省略 = 选中该仓库下的全部 skill
     blacklist:
-      - defuddle           # 即使 whitelist 里有，这里列出的也会被排除
+      - json-canvas        # 即使 whitelist 里有，这里列出的也会被排除
 
   axton-obsidian-visual-skills:
     whitelist:
