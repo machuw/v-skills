@@ -6,3 +6,7 @@ sources:
   axton-obsidian-visual-skills:
     whitelist: []
     blacklist: []
+
+  khazix-skills:
+    whitelist: []
+    blacklist: []

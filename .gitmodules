@@ -4,3 +4,6 @@
 [submodule "obsidian-skills"]
 	path = sources/obsidian-skills
 	url = git@github.com:kepano/obsidian-skills.git
+[submodule "sources/khazix-skills"]
+	path = sources/khazix-skills
+	url = git@github.com:KKKKhazix/khazix-skills.git
