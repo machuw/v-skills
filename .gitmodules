@@ -1,0 +1,6 @@
+[submodule "axton-obsidian-visual-skills"]
+	path = sources/axton-obsidian-visual-skills
+	url = git@github.com:axtonliu/axton-obsidian-visual-skills.git
+[submodule "obsidian-skills"]
+	path = sources/obsidian-skills
+	url = git@github.com:kepano/obsidian-skills.git
