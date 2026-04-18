@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -95,6 +97,22 @@ def build_desired_skills(repo_skill_map: dict[str, dict[str, Path]]) -> dict[str
             owners[skill_name] = repo_name
 
     return desired
+
+
+def collect_desired_skills(
+    sources_root: Path,
+    config: dict[str, RepoRule],
+) -> dict[str, Path]:
+    repo_skill_map: dict[str, dict[str, Path]] = {}
+
+    for repo_name, rule in config.items():
+        repo_path = sources_root / repo_name
+        if not repo_path.is_dir():
+            raise DiscoveryError(f"{repo_path}: configured repository does not exist")
+        discovered = discover_repo_skills(repo_path)
+        repo_skill_map[repo_name] = select_repo_skills(repo_name, discovered, rule)
+
+    return build_desired_skills(repo_skill_map)
 
 
 def sync_targets(
@@ -255,6 +273,44 @@ def _remove_stale_managed_links(
             raise SyncError(f"{link_path}: stale managed path for '{skill_name}' is no longer a symlink")
 
 
+def resolve_manifest_path(env: dict[str, str]) -> Path:
+    state_home = env.get("XDG_STATE_HOME")
+    if state_home:
+        return Path(state_home) / "v-skills" / "skill-sync-manifest.json"
+
+    home = env.get("HOME")
+    if home:
+        return Path(home) / ".local" / "state" / "v-skills" / "skill-sync-manifest.json"
+
+    return Path.home() / ".local" / "state" / "v-skills" / "skill-sync-manifest.json"
+
+
+def main(repo_root: Path | None = None, env: dict[str, str] | None = None) -> int:
+    env_map = dict(os.environ if env is None else env)
+    resolved_repo_root = (repo_root or Path(__file__).resolve().parent.parent).resolve()
+
+    try:
+        config = load_config(resolved_repo_root / "config" / "skill-sync.yaml")
+        desired = collect_desired_skills(resolved_repo_root / "sources", config)
+
+        if "HOME" in env_map:
+            home_dir = Path(env_map["HOME"])
+        else:
+            home_dir = Path.home()
+
+        target_roots = [
+            home_dir / ".claude" / "skills",
+            home_dir / ".codex" / "skills",
+        ]
+        manifest_path = resolve_manifest_path(env_map)
+        sync_targets(desired, target_roots, manifest_path)
+    except (ConfigError, DiscoveryError, ConflictError, SyncError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    return 0
+
+
 def _normalize_name_list(
     config_path: Path,
     repo_name: str,
@@ -369,3 +425,7 @@ def _parse_simple_yaml(text: str, config_path: Path) -> dict[str, object]:
 
 def _indent(line: str) -> int:
     return len(line) - len(line.lstrip(" "))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

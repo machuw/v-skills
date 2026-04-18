@@ -149,3 +149,58 @@ class SyncTargetsTests(unittest.TestCase):
                 )
 
             self.assertFalse((claude_dir / "skill-one").exists())
+
+
+class CollectDesiredSkillsTests(unittest.TestCase):
+    def test_collect_desired_skills_only_uses_configured_repositories(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            sources_root = repo_root / "sources"
+            selected = sources_root / "repo-a" / "skill-one"
+            skipped = sources_root / "repo-b" / "skill-two"
+            selected.mkdir(parents=True)
+            skipped.mkdir(parents=True)
+            (selected / "SKILL.md").write_text("", encoding="utf-8")
+            (skipped / "SKILL.md").write_text("", encoding="utf-8")
+
+            config = {
+                "repo-a": sync_skills.RepoRule(whitelist=[], blacklist=[]),
+            }
+
+            desired = sync_skills.collect_desired_skills(sources_root, config)
+
+            self.assertEqual(desired, {"skill-one": selected.resolve()})
+
+
+class MainTests(unittest.TestCase):
+    def test_main_uses_repo_config_and_default_targets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            config_dir = repo_root / "config"
+            config_dir.mkdir()
+            (config_dir / "skill-sync.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    sources:
+                      repo-a:
+                        whitelist: []
+                        blacklist: []
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            skill_dir = repo_root / "sources" / "repo-a" / "skill-one"
+            skill_dir.mkdir(parents=True)
+            (skill_dir / "SKILL.md").write_text("", encoding="utf-8")
+
+            env = {
+                "HOME": str(repo_root),
+                "XDG_STATE_HOME": str(repo_root / ".state"),
+            }
+
+            exit_code = sync_skills.main(repo_root=repo_root, env=env)
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue((repo_root / ".claude" / "skills" / "skill-one").is_symlink())
+            self.assertTrue((repo_root / ".codex" / "skills" / "skill-one").is_symlink())
