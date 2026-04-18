@@ -48,3 +48,29 @@ class DiscoverSkillsTests(unittest.TestCase):
 
             self.assertEqual(set(root_skills), {"alpha"})
             self.assertEqual(set(subdir_skills), {"beta"})
+
+
+class SelectSkillsTests(unittest.TestCase):
+    def test_select_repo_skills_applies_blacklist_after_whitelist(self) -> None:
+        discovered = {
+            "keep-me": Path("/tmp/keep-me"),
+            "drop-me": Path("/tmp/drop-me"),
+            "also-drop": Path("/tmp/also-drop"),
+        }
+        rule = sync_skills.RepoRule(
+            whitelist=["keep-me", "drop-me"],
+            blacklist=["drop-me"],
+        )
+
+        selected = sync_skills.select_repo_skills("repo-a", discovered, rule)
+
+        self.assertEqual(selected, {"keep-me": Path("/tmp/keep-me")})
+
+    def test_build_desired_skills_rejects_duplicate_names(self) -> None:
+        repo_skill_map = {
+            "repo-a": {"shared": Path("/tmp/repo-a/shared")},
+            "repo-b": {"shared": Path("/tmp/repo-b/shared")},
+        }
+
+        with self.assertRaises(sync_skills.ConflictError):
+            sync_skills.build_desired_skills(repo_skill_map)

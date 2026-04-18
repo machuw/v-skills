@@ -12,6 +12,10 @@ class DiscoveryError(RuntimeError):
     pass
 
 
+class ConflictError(RuntimeError):
+    pass
+
+
 @dataclass(frozen=True)
 class RepoRule:
     whitelist: list[str]
@@ -53,6 +57,39 @@ def discover_repo_skills(repo_path: Path) -> dict[str, Path]:
             discovered[child.name] = resolved
 
     return discovered
+
+
+def select_repo_skills(
+    repo_name: str,
+    discovered: dict[str, Path],
+    rule: RepoRule,
+) -> dict[str, Path]:
+    configured = set(rule.whitelist) | set(rule.blacklist)
+    unknown = configured - set(discovered)
+    if unknown:
+        names = ", ".join(sorted(unknown))
+        raise ConfigError(f"{repo_name}: unknown skills in config: {names}")
+
+    selected_names = set(discovered) if not rule.whitelist else set(rule.whitelist)
+    selected_names -= set(rule.blacklist)
+    return {name: discovered[name] for name in sorted(selected_names)}
+
+
+def build_desired_skills(repo_skill_map: dict[str, dict[str, Path]]) -> dict[str, Path]:
+    desired: dict[str, Path] = {}
+    owners: dict[str, str] = {}
+
+    for repo_name, repo_skills in repo_skill_map.items():
+        for skill_name, skill_path in repo_skills.items():
+            if skill_name in desired:
+                raise ConflictError(
+                    f"duplicate skill '{skill_name}' found in repositories "
+                    f"'{owners[skill_name]}' and '{repo_name}'"
+                )
+            desired[skill_name] = skill_path
+            owners[skill_name] = repo_name
+
+    return desired
 
 
 def _normalize_name_list(
