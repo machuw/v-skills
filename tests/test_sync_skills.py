@@ -74,3 +74,78 @@ class SelectSkillsTests(unittest.TestCase):
 
         with self.assertRaises(sync_skills.ConflictError):
             sync_skills.build_desired_skills(repo_skill_map)
+
+
+class SyncTargetsTests(unittest.TestCase):
+    def test_sync_creates_and_cleans_up_only_managed_links(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            source_one = repo_root / "sources" / "repo-a" / "skill-one"
+            source_two = repo_root / "sources" / "repo-a" / "skill-two"
+            source_one.mkdir(parents=True)
+            source_two.mkdir(parents=True)
+            (source_one / "SKILL.md").write_text("", encoding="utf-8")
+            (source_two / "SKILL.md").write_text("", encoding="utf-8")
+
+            claude_dir = repo_root / ".claude" / "skills"
+            codex_dir = repo_root / ".codex" / "skills"
+            state_path = repo_root / ".state" / "skill-sync-manifest.json"
+
+            sync_skills.sync_targets(
+                {"skill-one": source_one, "skill-two": source_two},
+                [claude_dir, codex_dir],
+                state_path,
+            )
+
+            self.assertTrue((claude_dir / "skill-one").is_symlink())
+            self.assertEqual((claude_dir / "skill-one").resolve(), source_one.resolve())
+
+            sync_skills.sync_targets(
+                {"skill-two": source_two},
+                [claude_dir, codex_dir],
+                state_path,
+            )
+
+            self.assertFalse((claude_dir / "skill-one").exists())
+            self.assertTrue((claude_dir / "skill-two").is_symlink())
+            self.assertEqual((claude_dir / "skill-two").resolve(), source_two.resolve())
+            self.assertTrue((codex_dir / "skill-two").is_symlink())
+
+    def test_sync_rejects_unmanaged_existing_target(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            source_skill = repo_root / "sources" / "repo-a" / "skill-one"
+            source_skill.mkdir(parents=True)
+            (source_skill / "SKILL.md").write_text("", encoding="utf-8")
+
+            claude_dir = repo_root / ".claude" / "skills"
+            claude_dir.mkdir(parents=True)
+            (claude_dir / "skill-one").write_text("manual", encoding="utf-8")
+
+            with self.assertRaises(sync_skills.SyncError):
+                sync_skills.sync_targets(
+                    {"skill-one": source_skill},
+                    [claude_dir],
+                    repo_root / ".state" / "skill-sync-manifest.json",
+                )
+
+    def test_sync_does_not_leave_partial_changes_when_preflight_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            source_skill = repo_root / "sources" / "repo-a" / "skill-one"
+            source_skill.mkdir(parents=True)
+            (source_skill / "SKILL.md").write_text("", encoding="utf-8")
+
+            claude_dir = repo_root / ".claude" / "skills"
+            codex_dir = repo_root / ".codex" / "skills"
+            codex_dir.mkdir(parents=True)
+            (codex_dir / "skill-one").write_text("manual", encoding="utf-8")
+
+            with self.assertRaises(sync_skills.SyncError):
+                sync_skills.sync_targets(
+                    {"skill-one": source_skill},
+                    [claude_dir, codex_dir],
+                    repo_root / ".state" / "skill-sync-manifest.json",
+                )
+
+            self.assertFalse((claude_dir / "skill-one").exists())
